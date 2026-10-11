@@ -1,0 +1,71 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CopyTunnel — CLIENT configuration
+# ─────────────────────────────────────────────────────────────────────────────
+# The client captures local TCP/UDP packets through a TUN device, encrypts each
+# one, and relays it to the server. Replies arrive back the same way.
+
+# This process's role. Must be "client".
+role = "client"
+
+# ── Transport ────────────────────────────────────────────────────────────────
+
+# IP:PORT of the remote CopyTunnel server.
+server_addr = "203.0.113.10:51822"
+
+# ── Security ─────────────────────────────────────────────────────────────────
+
+# Shared secret. MUST be identical on client and server. Min 16 chars.
+# Change this to a long random value.
+pre_shared_key = "change-me-to-a-long-random-secret-key"
+
+# Optional: a fixed 32-byte key as 64 hex chars. When set it overrides the key
+# derived from pre_shared_key. Must match on both sides.
+# key_hex = "0000000000000000000000000000000000000000000000000000000000000000"
+
+# Wire cipher. One of:
+#   "chacha20poly1305"  — AEAD, fast everywhere, no AES hardware needed (default)
+#   "xchacha20poly1305" — AEAD, 192-bit nonce, safest for very high packet rates
+#   "aes256gcm"         — AEAD, fastest on CPUs with AES-NI / ARMv8 crypto
+#   "aes128gcm"         — AEAD, slightly faster AES, 128-bit key
+#   "xor"               — obfuscation only, NOT confidential
+#   "none"              — plaintext passthrough (debugging only)
+# See the README "Encryption Methods" section for the trade-offs.
+encryption = "chacha20poly1305"
+
+# Extra whole-frame XOR obfuscation pass (changes byte distribution for DPI).
+# Must match on both sides. Adds no cryptographic strength.
+obfuscate = false
+
+# ── Packet selection ─────────────────────────────────────────────────────────
+
+# IP protocols to tunnel. Packets of other protocols are dropped.
+forward_protocols = ["tcp", "udp"]
+
+# Port filter. Empty = forward every port. When set, a packet is tunnelled only
+# if its source OR destination port appears here.
+forward_ports = []
+
+# ── TUN interface ────────────────────────────────────────────────────────────
+
+tun_name    = "copy0"
+tun_ip      = "10.66.0.2"      # swap with the server's tun_ip
+tun_peer_ip = "10.66.0.1"      # the server's tun_ip
+tun_netmask = "255.255.255.252"
+mtu         = 1380
+
+# ── Networking ───────────────────────────────────────────────────────────────
+
+# Physical NIC (used by the server for NAT; harmless on the client).
+interface = "eth0"
+
+# NAT auto-setup is a server-side concern; leave false on the client.
+auto_nat = false
+
+# Seconds between keepalives so the server always knows where to send replies.
+# 0 disables.
+keepalive_secs = 15
+
+# ── Runtime ──────────────────────────────────────────────────────────────────
+
+worker_threads = 0            # 0 = one per CPU core
+log_level      = "info"       # trace | debug | info | warn | error

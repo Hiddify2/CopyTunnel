@@ -1,0 +1,57 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CopyTunnel — SERVER configuration
+# ─────────────────────────────────────────────────────────────────────────────
+# The server decrypts relayed packets and hands them to the kernel, which routes
+# and NATs them to their real destination; replies are encrypted back to the
+# client.
+
+# This process's role. Must be "server".
+role = "server"
+
+# ── Transport ────────────────────────────────────────────────────────────────
+
+# Local IP:PORT to listen on for client datagrams.
+listen_addr = "0.0.0.0:51822"
+
+# ── Security ─────────────────────────────────────────────────────────────────
+
+# MUST match the client exactly.
+pre_shared_key = "change-me-to-a-long-random-secret-key"
+
+# key_hex = "0000000000000000000000000000000000000000000000000000000000000000"
+
+# MUST match the client. See config/client.toml for the list of ciphers.
+encryption = "chacha20poly1305"
+
+# MUST match the client.
+obfuscate = false
+
+# ── Packet selection ─────────────────────────────────────────────────────────
+
+forward_protocols = ["tcp", "udp"]
+forward_ports = []
+
+# ── TUN interface ────────────────────────────────────────────────────────────
+
+tun_name    = "copy0"
+tun_ip      = "10.66.0.1"      # swap with the client's tun_ip
+tun_peer_ip = "10.66.0.2"      # the client's tun_ip
+tun_netmask = "255.255.255.252"
+mtu         = 1380
+
+# ── Networking ───────────────────────────────────────────────────────────────
+
+# Physical NIC that reaches the internet — used for the MASQUERADE rule.
+interface = "eth0"
+
+# Automatically enable IPv4 forwarding + install/remove NAT (MASQUERADE) rules.
+# Set false if you manage NAT yourself.
+auto_nat = true
+
+# Keepalives are driven by the client; this field is ignored on the server.
+keepalive_secs = 15
+
+# ── Runtime ──────────────────────────────────────────────────────────────────
+
+worker_threads = 0
+log_level      = "info"

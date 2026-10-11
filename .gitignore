@@ -1,0 +1,6 @@
+/target
+**/*.rs.bk
+*.pem
+
+# Cargo.lock is committed on purpose: CopyTunnel ships as a binary application,
+# so reproducible builds matter.

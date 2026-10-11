@@ -1,0 +1,63 @@
+[package]
+name = "copytunnel"
+version = "1.0.0"
+edition = "2021"
+authors = ["Hiddify2"]
+description = "Encrypted layer-3 tunnel that copies every TCP/UDP packet from the client, encrypts it, and relays it through a server to its real destination."
+license = "MIT"
+repository = "https://github.com/Hiddify2/CopyTunnel"
+readme = "README.md"
+
+# Unified binary: picks client/server from the `role` field in the config file.
+[[bin]]
+name = "copytunnel"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime. `net` for the UDP transport, the unix AsyncFd lives behind the
+# default feature set plus `rt`, and `signal` lets us tear down NAT rules cleanly.
+tokio = { version = "1.38", features = [
+    "rt-multi-thread",
+    "macros",
+    "net",
+    "io-util",
+    "sync",
+    "time",
+    "signal",
+] }
+
+# Configuration: TOML files deserialized through serde.
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+
+# Error handling.
+anyhow = "1"
+thiserror = "1"
+
+# Logging.
+log = "0.4"
+env_logger = "0.11"
+
+# Key derivation (SHA-256 of the pre-shared key) and hex parsing for raw keys.
+sha2 = "0.10"
+hex = "0.4"
+
+# AEAD ciphers. Each is a separate, audited RustCrypto crate.
+chacha20poly1305 = "0.10"   # ChaCha20-Poly1305 and XChaCha20-Poly1305
+aes-gcm = "0.10"            # AES-128-GCM and AES-256-GCM
+
+# CSPRNG for per-frame nonces.
+rand = "0.8"
+
+# Raw TUN file-descriptor handling on Linux.
+libc = "0.2"
+
+# CLI parsing.
+clap = { version = "4", features = ["derive"] }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true

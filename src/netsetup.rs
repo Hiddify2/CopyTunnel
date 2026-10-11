@@ -5,6 +5,7 @@
 //!   1. enables `net.ipv4.ip_forward`,
 //!   2. installs a MASQUERADE rule on the physical interface,
 //!   3. allows forwarding to/from the TUN device,
+//!
 //! and tears all of that down again on shutdown. All operations are best-effort:
 //! a failure is logged as a warning rather than aborting the tunnel, because
 //! some deployments manage NAT externally.

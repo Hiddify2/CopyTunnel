@@ -104,12 +104,8 @@ impl Shared {
             return true;
         }
         let ports = &self.cfg.forward_ports;
-        let hit = info
-            .src_port
-            .map(|p| ports.contains(&p))
-            .unwrap_or(false)
-            || info.dst_port.map(|p| ports.contains(&p)).unwrap_or(false);
-        hit
+        info.src_port.map(|p| ports.contains(&p)).unwrap_or(false)
+            || info.dst_port.map(|p| ports.contains(&p)).unwrap_or(false)
     }
 }
 

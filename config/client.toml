@@ -7,6 +7,9 @@
 # This process's role. Must be "client".
 role = "client"
 
+# Capture mode: "tun" (this file) or "proxy" (see config/proxy-client.toml).
+mode = "tun"
+
 # ── Transport ────────────────────────────────────────────────────────────────
 
 # IP:PORT of the remote CopyTunnel server.

@@ -1,0 +1,25 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CopyTunnel — PROXY CLIENT configuration
+# ─────────────────────────────────────────────────────────────────────────────
+# Transparent-proxy ingress: sing-box captures outbound TCP/UDP via iptables
+# TPROXY and forwards each connection to the local SOCKS5 server below, which
+# CopyTunnel encrypts and relays to the server over TCP. See the README and the
+# interactive installer (scripts/menu.sh) which sets up sing-box + iptables for
+# you.
+
+role = "client"
+mode = "proxy"
+
+# TCP address of the CopyTunnel server's proxy listener.
+proxy_server = "203.0.113.10:51823"
+
+# Local SOCKS5 server address (sing-box's socks outbound points here).
+socks_listen = "127.0.0.1:1080"
+
+# ── Security (must match the server) ─────────────────────────────────────────
+pre_shared_key = "change-me-to-a-long-random-secret-key"
+# key_hex = "..."                      # optional explicit 32-byte key (64 hex)
+encryption = "chacha20poly1305"        # chacha20poly1305 | xchacha20poly1305 | aes256gcm | aes128gcm | xor | none
+obfuscate = false
+
+log_level = "info"

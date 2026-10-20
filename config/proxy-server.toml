@@ -1,0 +1,23 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CopyTunnel — PROXY SERVER configuration
+# ─────────────────────────────────────────────────────────────────────────────
+# Accepts encrypted TCP stream sessions from proxy clients, decrypts them, and
+# opens the real connection to each destination.
+#
+# A single server can ALSO serve TUN clients at the same time: just set
+# `listen_addr` to a UDP address as well (see config/server.toml). Here only the
+# proxy listener is enabled.
+
+role = "server"
+
+# Disable the TUN/UDP listener; enable only the proxy/TCP listener.
+listen_addr = ""
+proxy_listen = "0.0.0.0:51823"
+
+# ── Security (must match the client) ─────────────────────────────────────────
+pre_shared_key = "change-me-to-a-long-random-secret-key"
+# key_hex = "..."
+encryption = "chacha20poly1305"
+obfuscate = false
+
+log_level = "info"

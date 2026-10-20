@@ -10,8 +10,12 @@ role = "server"
 
 # ── Transport ────────────────────────────────────────────────────────────────
 
-# Local IP:PORT to listen on for client datagrams.
+# Local IP:PORT to listen on for TUN client datagrams (UDP). Empty disables it.
 listen_addr = "0.0.0.0:51822"
+
+# Also accept transparent-proxy clients (TCP) on this port, sharing the same key
+# and cipher. Set to "" to disable and serve TUN clients only.
+proxy_listen = "0.0.0.0:51823"
 
 # ── Security ─────────────────────────────────────────────────────────────────
 

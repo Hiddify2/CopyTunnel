@@ -2,20 +2,21 @@
 
 # 📦 CopyTunnel
 
-**An encrypted layer-3 tunnel that copies every TCP/UDP packet from the client, encrypts it, and relays it through a server to its real destination — and back.**
+**An encrypted tunnel that copies every TCP/UDP packet from the client, encrypts it, and relays it through a server to its real destination — and back. Two forwarding methods (TUN and transparent proxy) and six ciphers, driven by an interactive installer.**
 
 <p>
   <img src="https://img.shields.io/badge/language-Rust-orange?style=flat-square" alt="Rust">
   <img src="https://img.shields.io/badge/platform-Linux-lightgrey?style=flat-square" alt="Linux">
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License">
+  <img src="https://img.shields.io/badge/methods-TUN%20%7C%20Proxy-purple?style=flat-square" alt="Methods">
   <img src="https://img.shields.io/badge/ciphers-6-green?style=flat-square" alt="Ciphers">
 </p>
 
 <p>
+  <a href="#-quick-install">Quick Install</a> ·
+  <a href="#-two-forwarding-methods">Methods</a> ·
   <a href="#-how-it-works">How It Works</a> ·
-  <a href="#-encryption-methods">Encryption Methods</a> ·
-  <a href="#-install--build">Install</a> ·
-  <a href="#-quick-start">Quick Start</a> ·
+  <a href="#-encryption-methods">Encryption</a> ·
   <a href="#-configuration-reference">Configuration</a>
 </p>
 
@@ -32,29 +33,65 @@
 
 ## What it does
 
-CopyTunnel is a **point-to-point encrypted tunnel** built in Rust. It is a
-layer-3 (IP) tunnel in the same family as WireGuard or a classic IPsec road-warrior
-setup, with a deliberately simple design:
+CopyTunnel is a **point-to-point encrypted tunnel** built in Rust. The client
+captures your traffic, **encrypts every packet/stream**, and relays it to the
+server; the server **decrypts** it and lets the kernel route it to the real
+destination — and replies come back the same way. To the application it is
+transparent; to anyone watching the client↔server link it is opaque,
+authenticated traffic.
 
-1. On the **client**, a virtual `TUN` interface captures the IP packets your
-   applications send. CopyTunnel reads each packet, keeps only TCP and UDP
-   (configurable), and **encrypts the whole packet** with the cipher you chose.
-2. The encrypted frame is sent to the **server** over a single UDP data channel.
-3. The server **decrypts** it and writes the original packet into its own TUN
-   interface. The Linux kernel then **routes and NATs** it to the real
-   destination on the internet.
-4. Replies walk the same path in reverse: the server captures them, encrypts
-   them, and relays them back to the client, which decrypts and delivers them to
-   the application.
+It offers **two ways to capture traffic**, so you can pick what survives your
+network and matches your use case:
 
-To the application it is transparent. To anyone watching the link between client
-and server, it is a stream of opaque, authenticated UDP datagrams.
+| Method | Layer | Transport | Captures | Best for |
+|---|---|---|---|---|
+| **TUN** | L3 (IP packets) | UDP | all IPv4 TCP **and UDP** | full tunnelling, UDP apps, lowest overhead |
+| **Transparent Proxy** | L4 (streams) | TCP | TCP connections (via sing-box tproxy) | reliable relaying, works where UDP is blocked, no TUN needed |
 
-The TUN handling, point-to-point addressing, port-forward filtering, and the
-TOML configuration layout follow the model of
-[CandyTunnel](https://github.com/AmiRCandy/CandyTunnel); CopyTunnel keeps that
-operational shape but replaces the transport with a straightforward
-**encrypt → relay → decrypt → deliver** copy path and a menu of modern ciphers.
+Both methods use the **same CopyTunnel server, the same pre-shared key, and the
+same ciphers** — the server can serve TUN clients and proxy clients at the same
+time. An **interactive installer** (à la Hiddify Relay Builder) sets up either
+one for you, including sing-box and the iptables rules for the proxy method.
+
+The TUN handling, point-to-point addressing, port-forward filtering, and TOML
+config layout follow the model of
+[CandyTunnel](https://github.com/AmiRCandy/CandyTunnel).
+
+---
+
+## 🚀 Quick Install
+
+One command bootstraps everything (detects your distro, installs dependencies,
+fetches the binary, and launches the manager):
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Hiddify2/CopyTunnel/main/scripts/install.sh)"
+```
+
+Re-open the manager anytime with `copytunnel-menu` (or the short alias `ct`).
+
+The manager is a `whiptail` menu. You pick a **method**, then **Install /
+Status / Add / Remove / Uninstall** within it:
+
+```
+CopyTunnel — choose method
+  ┌────────────────────────────────────────────────┐
+  │  TUN       Layer-3 encrypted tunnel (TUN + UDP) │
+  │  Proxy     Transparent proxy (sing-box + iptbl) │
+  │  Options   DNS · update · keygen · test · rm    │
+  │  Quit                                           │
+  └────────────────────────────────────────────────┘
+```
+
+| Menu | What it does |
+|---|---|
+| **TUN → Install** | Wizard for role (client/server), key (auto-generate or type), cipher, obfuscation, addresses, ports, NIC/NAT. Writes the config + a systemd unit and starts it. |
+| **Proxy → Install** | Same wizard; for a client it **also** downloads sing-box, writes its tproxy config, installs the iptables TPROXY rules (with a managed bypass list), and wires up three systemd units in the right order. |
+| **Proxy → Add / Remove** | Manage the direct-route **bypass list** (IPs/CIDRs sent outside the tunnel). |
+| **Status** | `systemctl` state + listening sockets + (proxy) active mangle rules. |
+| **Options** | Set DNS, update the binary + restart services, generate a random key, run a connectivity/tunnel test, or uninstall everything. |
+
+> Everything the installer does by hand is also documented below for manual setups.
 
 ---
 
@@ -95,6 +132,63 @@ The `type-byte` distinguishes a forwarded IP packet (`0x01`) from a keepalive
 (`0x02`). AEAD authentication doubles as a cheap filter: any datagram that
 doesn't decrypt under the shared key — random scans, spoofed packets, a peer with
 the wrong key — is dropped before it can ever touch the TUN device.
+
+---
+
+## 🚦 Two Forwarding Methods
+
+### Method 1 — TUN (layer 3)
+
+The diagram above. A TUN device captures **all IPv4 TCP and UDP** packets; each
+is encrypted and relayed over **UDP**. The inner protocols handle their own
+reliability, so the tunnel is a dumb, fast pipe. Best when you want to forward
+everything (including UDP: DNS, QUIC, games, VoIP) and have `CAP_NET_ADMIN`.
+
+### Method 2 — Transparent Proxy (layer 4)
+
+Here **sing-box** provides the transparent *ingress*: iptables `TPROXY` rules
+redirect outbound connections into sing-box's `tproxy` inbound, which forwards
+each one to a **local SOCKS5 server that CopyTunnel runs**. CopyTunnel applies
+the **same AEAD encryption** and relays the stream to the server over **TCP**;
+the server opens the real connection. sing-box only captures traffic —
+**CopyTunnel does all the crypto.**
+
+```text
+          CLIENT HOST                                          SERVER HOST          INTERNET
+ ┌───────────────────────────────────────────┐        ┌────────────────────┐      ┌────────┐
+ │ app ─▶ iptables TPROXY (mangle/fwmark)     │        │                    │      │ real   │
+ │             │                              │        │                    │      │ dest   │
+ │             ▼                              │        │                    │      └───▲────┘
+ │   sing-box  tproxy inbound  ──▶  socks out │        │                    │          │
+ │                                   │        │        │                    │          │
+ │   127.0.0.1:socks_listen ◀────────┘        │        │                    │          │
+ │             │                              │        │                    │          │
+ │   CopyTunnel SOCKS5 server                 │        │                    │          │
+ │   ── encrypt (AEAD, length-framed) ──┐     │  TCP   │  decrypt ─▶ connect│──────────┘
+ │                                      └───────────────▶│  relay bytes ⇄   │
+ │   deliver ◀── decrypt ◀───────────────── TCP ◀────────┘                  │
+ └───────────────────────────────────────────┘        └────────────────────┘
+```
+
+Per relayed connection (one TCP connection to the server), every message is
+`[u16 length][ sealed-frame ]`:
+
+```
+ 1. client → server : sealed  [atyp][addr][port]     (the destination)
+ 2. server → client : sealed  [status]               (0 = connected)
+ 3. both ways       : sealed  [raw bytes] …          until a half closes
+```
+
+The first frame failing authentication → the connection is dropped, so internet
+scanners hitting the proxy port get nothing. **Loop prevention:** the iptables
+rules bypass loopback, private ranges, and the server IP, so the
+CopyTunnel→server socket is never re-captured. A managed **bypass list**
+(`Proxy → Add/Remove`, stored at `/etc/copytunnel/bypass.list`) lets you send
+specific IPs/CIDRs outside the tunnel.
+
+> **TCP vs UDP:** proxy mode relays **TCP** (covers all HTTP/HTTPS/TLS traffic).
+> For UDP (DNS, QUIC, …) use **TUN** mode, which tunnels UDP natively. A server
+> can run both listeners at once, so clients can mix methods.
 
 ---
 
@@ -251,13 +345,30 @@ To restrict which ports are tunnelled at all, set `forward_ports` (e.g.
 
 Both configs share one schema; `role` selects the half that runs.
 
-### Transport
+### Role & mode
 
 | Field | Side | Default | Description |
 |---|---|---|---|
 | `role` | both | — | `"client"` or `"server"`. |
+| `mode` | client | `tun` | `"tun"` (TUN method) or `"proxy"` (transparent-proxy method). Ignored on the server. |
+
+### Transport — TUN method (UDP)
+
+| Field | Side | Default | Description |
+|---|---|---|---|
 | `server_addr` | client | — | `IP:PORT` of the server's UDP listener. |
-| `listen_addr` | server | `0.0.0.0:51822` | Local `IP:PORT` to receive client datagrams. |
+| `listen_addr` | server | `0.0.0.0:51822` | Local `IP:PORT` for the UDP (TUN) listener. Empty `""` disables it. |
+
+### Transport — Proxy method (TCP)
+
+| Field | Side | Default | Description |
+|---|---|---|---|
+| `proxy_server` | client | — | `IP:PORT` of the server's TCP proxy listener. |
+| `proxy_listen` | server | `0.0.0.0:51823` | Local `IP:PORT` for the TCP proxy listener. Empty `""` disables it. |
+| `socks_listen` | client | `127.0.0.1:1080` | Local SOCKS5 bind (sing-box's socks outbound dials this). |
+
+> A server may enable **both** `listen_addr` and `proxy_listen` to serve TUN and
+> proxy clients simultaneously with one key/cipher.
 
 ### Security
 
@@ -306,7 +417,10 @@ Both configs share one schema; `role` selects the half that runs.
 | **IPv4 only** | The tunnel forwards IPv4 TCP/UDP. IPv6 and other protocols are dropped at the TUN. |
 | **MTU** | If you see stalls on large transfers, lower `mtu` (e.g. 1280). The tunnel adds nonce+tag overhead on top of your packet. |
 | **NAT** | With `auto_nat = false`, set up `net.ipv4.ip_forward` and MASQUERADE yourself. |
-| **Routing is yours** | CopyTunnel never changes your default route automatically. Nothing is tunnelled until you route it into `copy0`. |
+| **Routing (TUN)** | CopyTunnel never changes your default route automatically. Nothing is tunnelled until you route it into `copy0`. |
+| **Proxy = TCP** | The transparent-proxy method relays TCP. Tunnel UDP via the TUN method (a server can run both). |
+| **Proxy bypass** | iptables rules auto-bypass loopback, private ranges, and the server IP. Add more via `Proxy → Add` (`/etc/copytunnel/bypass.list`). |
+| **sing-box** | The installer downloads sing-box for proxy clients. It is only the transparent *ingress*; CopyTunnel does the encryption. |
 
 ---
 
@@ -337,19 +451,33 @@ openssl rand -hex 32
 
 ---
 
-## 🛠️ Manager Script
+## 🛠️ Manager & Files
 
-`scripts/copytunnel.sh` wraps build, config generation, and `systemd` service
-management:
+The interactive manager (`scripts/menu.sh`, launched by `scripts/install.sh`)
+is the recommended way to run everything — see [Quick Install](#-quick-install).
+It installs to a predictable layout:
 
-```bash
-sudo bash scripts/copytunnel.sh install        # build + install binary
-sudo bash scripts/copytunnel.sh service server # create & start a systemd unit
-sudo bash scripts/copytunnel.sh status
-sudo bash scripts/copytunnel.sh logs
+```
+/usr/local/bin/copytunnel            ← the binary
+/usr/local/bin/copytunnel-menu, ct   ← launch the manager
+/opt/copytunnel/                     ← source + scripts
+/etc/copytunnel/tun.toml             ← TUN method config
+/etc/copytunnel/proxy.toml           ← Proxy method config
+/etc/copytunnel/singbox.json         ← sing-box (proxy client) config
+/etc/copytunnel/tproxy-up.sh / -down.sh  ← iptables TPROXY rules
+/etc/copytunnel/bypass.list          ← direct-route bypass entries
+/etc/systemd/system/copytunnel-tun.service
+/etc/systemd/system/copytunnel-proxy.service
+/etc/systemd/system/sing-box.service
+/etc/systemd/system/copytunnel-tproxy.service
 ```
 
-See the script header for all subcommands.
+Manage services directly if you prefer:
+
+```bash
+systemctl status copytunnel-tun       # or copytunnel-proxy / sing-box / copytunnel-tproxy
+journalctl -u copytunnel-proxy -f
+```
 
 ---
 

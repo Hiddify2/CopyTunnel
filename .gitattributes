@@ -1,0 +1,11 @@
+# Keep LF line endings for everything in the repo. Shell scripts and configs are
+# consumed on Linux and MUST NOT get CRLF, or `bash` fails with `\r` errors.
+* text=auto eol=lf
+
+*.sh    text eol=lf
+*.rs    text eol=lf
+*.toml  text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.json  text eol=lf
+LICENSE text eol=lf
